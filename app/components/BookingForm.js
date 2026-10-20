@@ -1,60 +1,86 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export default function BookingForm({ vehicles }) {
-  const [state, setState] = useState({ loading: false, error: "", ref: "" });
+export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
+  const [state, setState] = useState({ loading: false, error: "", requestNo: null, duplicate: false });
+  const startedAt = useRef(Date.now());
+  const cfRef = useRef(null);
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+  useEffect(() => {
+    if (!siteKey) return;
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    sc.async = true;
+    document.head.appendChild(sc);
+  }, [siteKey]);
+
+  const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 
   async function submit(e) {
     e.preventDefault();
-    setState({ loading: true, error: "", ref: "" });
-    const data = Object.fromEntries(new FormData(e.target));
-    if (data.pickupAt) data.pickupAt = new Date(data.pickupAt).toISOString();
+    const form = e.target;
+    setState({ loading: true, error: "", requestNo: null, duplicate: false });
+    const data = Object.fromEntries(new FormData(form));
+    data.startedAt = startedAt.current;
+    data.cfToken = data["cf-turnstile-response"] || "";
     const res = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) return setState({ loading: false, error: j.error || "Something went wrong", ref: "" });
-    e.target.reset();
-    setState({ loading: false, error: "", ref: j.ref });
+    if (!res.ok) {
+      if (window.turnstile) window.turnstile.reset();
+      return setState({ loading: false, error: j.error || "Something went wrong. Please try again.", requestNo: null, duplicate: false });
+    }
+    form.reset();
+    setState({ loading: false, error: "", requestNo: j.requestNo, duplicate: !!j.duplicate });
   }
 
-  if (state.ref)
+  if (state.requestNo !== null)
     return (
-      <div className="bg-white rounded-3xl p-8 text-center shadow-2xl">
-        <div className="text-5xl mb-3">✅</div>
-        <h3 className="text-xl font-bold">Booking received!</h3>
-        <p className="text-gray-600 mt-2 text-sm">Reference <b>{state.ref}</b>. We have sent a confirmation on WhatsApp and will send a reminder before your trip.</p>
-        <button onClick={() => setState({ loading: false, error: "", ref: "" })} className="mt-5 text-sm text-[#c41e5b] font-semibold">Book another ride</button>
+      <div className="bg-white rounded-3xl p-8 text-center shadow-2xl text-gray-900">
+        <div className="text-5xl mb-3">📩</div>
+        <h3 className="text-xl font-bold">{state.duplicate ? "We already have your request" : "Your request has been received"}</h3>
+        <p className="text-gray-600 mt-3 text-sm">
+          Your request is <b>awaiting confirmation</b> from our team. We will contact you on WhatsApp / phone shortly to confirm your fare and booking.
+        </p>
+        <p className="text-xs text-gray-500 mt-3">A Booking ID is issued only after we confirm your trip.</p>
+        <button onClick={() => { startedAt.current = Date.now(); setState({ loading: false, error: "", requestNo: null, duplicate: false }); }} className="mt-5 text-sm text-[#c41e5b] font-semibold">Make another request</button>
       </div>
     );
 
   return (
-    <form onSubmit={submit} className="bg-white rounded-3xl p-6 shadow-2xl space-y-3 text-left">
-      <h3 className="font-bold text-lg">Book your cab</h3>
-      <input name="website" className="hidden" tabIndex={-1} autoComplete="off" />
+    <form id="book" onSubmit={submit} className="bg-white rounded-3xl p-6 shadow-2xl space-y-3 text-left text-gray-900">
+      <h3 className="font-bold text-lg">Request a booking</h3>
+      <input name="website" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
       <select name="tripType" required className="form-field" defaultValue="OUTSTATION">
-        <option value="OUTSTATION">Outstation</option>
+        <option value="OUTSTATION">Outstation / Intercity</option>
         <option value="AIRPORT">Airport Transfer</option>
         <option value="LOCAL">Local Hourly Rental</option>
         <option value="CORPORATE">Corporate Travel</option>
         <option value="PACKAGE">Tour Package</option>
       </select>
       <input name="pickup" required placeholder="Pickup location" className="form-field" />
-      <input name="drop" placeholder="Drop location" className="form-field" />
-      <input name="pickupAt" type="datetime-local" required className="form-field" />
+      <input name="destination" required placeholder="Destination" className="form-field" />
       <div className="grid grid-cols-2 gap-3">
-        <select name="vehicleId" className="form-field">
+        <input name="date" type="date" required min={today} className="form-field" aria-label="Travel date" />
+        <input name="time" type="time" required className="form-field" aria-label="Travel time" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <select name="vehicleId" defaultValue={defaultVehicleId} className="form-field">
           <option value="">Any vehicle</option>
-          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.seats} seats)</option>)}
+          {vehicles.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.seats} seats, {v.ac ? "AC" : "Non-AC"})</option>)}
         </select>
-        <input name="passengers" type="number" min="1" max="60" defaultValue="2" className="form-field" />
+        <input name="passengers" type="number" min="1" max="60" defaultValue="2" className="form-field" aria-label="Passengers" />
       </div>
       <input name="name" required placeholder="Your name" className="form-field" />
       <div className="flex gap-2">
         <span className="form-field !w-auto">+91</span>
-        <input name="phone" required inputMode="numeric" pattern="\d{10}" placeholder="WhatsApp number" className="form-field" />
+        <input name="phone" required inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="Mobile number" className="form-field" />
       </div>
+      <textarea name="notes" rows={2} placeholder="Anything else? (optional)" className="form-field" />
+      {siteKey && <div ref={cfRef} className="cf-turnstile" data-sitekey={siteKey} />}
       {state.error && <p className="text-red-600 text-sm">{state.error}</p>}
-      <button disabled={state.loading} className="btn-primary w-full rounded-xl py-3">{state.loading ? "Booking…" : "Get Quote & Book"}</button>
-      <p className="text-xs text-gray-500 text-center">Confirmation and reminders are sent on WhatsApp.</p>
+      <button disabled={state.loading} className="btn-primary w-full rounded-xl py-3">{state.loading ? "Sending…" : "Send booking request"}</button>
+      <p className="text-xs text-gray-500 text-center">This is a request. Your booking is confirmed only after our team replies.</p>
     </form>
   );
 }

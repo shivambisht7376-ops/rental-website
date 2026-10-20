@@ -5,78 +5,167 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum BookingStatus {
-  PENDING
+  NEW
+  AWAITING
   CONFIRMED
-  ASSIGNED
   COMPLETED
   CANCELLED
+  REJECTED
 }
 
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  resetTokenHash   String?
+  resetExpires     DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model Image {
+  id   String @id @default(cuid())
+  mime String
+  data Bytes
+  createdAt DateTime @default(now())
 }
 
 model Vehicle {
-  id          String  @id @default(cuid())
-  name        String
-  category    String // Sedan, SUV, Premium SUV, Tempo, Bus
-  seats       Int
-  perKm       Int // INR per km (outstation)
-  hourly8     Int // 8hr/80km local package
-  imageUrl    String?
-  active      Boolean @default(true)
-  bookings    Booking[]
+  id        String    @id @default(cuid())
+  name      String
+  category  String // Sedan, SUV, Tempo, Bus...
+  seats     Int
+  ac        Boolean   @default(true)
+  specs     String? // luggage, features
+  perKm     Int
+  hourly8   Int       @default(0)
+  extraKm   Int       @default(0) // extra charge per km beyond package
+  waitingPerHr Int    @default(0)
+  nightCharge Int     @default(0)
+  imageUrl  String?
+  active    Boolean   @default(true)
+  sortOrder Int       @default(0)
+  bookings  Booking[]
+  routeFares RouteFare[]
+}
+
+model Driver {
+  id       String    @id @default(cuid())
+  name     String
+  phone    String?
+  active   Boolean   @default(true)
+  bookings Booking[]
+}
+
+model Route {
+  id       String      @id @default(cuid())
+  from     String
+  to       String
+  distanceKm Int?
+  note     String?
+  active   Boolean     @default(true)
+  fares    RouteFare[]
+}
+
+model RouteFare {
+  id        String  @id @default(cuid())
+  routeId   String
+  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  fare      Int
+
+  @@unique([routeId, vehicleId])
 }
 
 model Package {
-  id        String  @id @default(cuid())
-  title     String
-  summary   String
-  imageUrl  String?
-  priceFrom Int
-  active    Boolean @default(true)
+  id          String  @id @default(cuid())
+  title       String
+  summary     String
+  itinerary   String?
+  duration    String?
+  imageUrl    String?
+  priceFrom   Int
+  published   Boolean @default(true)
+  sortOrder   Int     @default(0)
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String    @unique
+  notes     String?
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
 }
 
 model Booking {
-  id          String        @id @default(cuid())
-  ref         String        @unique
-  name        String
-  phone       String // E.164 digits e.g. 919876543210
-  tripType    String // OUTSTATION | AIRPORT | LOCAL | CORPORATE | PACKAGE
-  pickup      String
-  drop        String?
-  pickupAt    DateTime
-  passengers  Int           @default(1)
-  vehicleId   String?
-  vehicle     Vehicle?      @relation(fields: [vehicleId], references: [id])
-  quote       Int?
-  notes       String?
-  status      BookingStatus @default(PENDING)
-  driverName  String?
-  driverPhone String?
-  confirmationSentAt DateTime?
-  reminderSentAt     DateTime?
-  createdAt   DateTime      @default(now())
-  messages    MessageLog[]
+  id            String        @id @default(cuid())
+  requestNo     Int           @default(autoincrement())
+  bookingNo     Int?          @unique // set only on confirmation
+  bookingId     String?       @unique // e.g. CB-0001, set only on confirmation
+  status        BookingStatus @default(NEW)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  customerName  String
+  phone         String // 91XXXXXXXXXX
+  tripType      String
+  pickup        String
+  destination   String?
+  pickupAt      DateTime
+  passengers    Int           @default(1)
+  vehicleId     String?
+  vehicle       Vehicle?      @relation(fields: [vehicleId], references: [id])
+  vehicleName   String? // snapshot
+  driverId      String?
+  driver        Driver?       @relation(fields: [driverId], references: [id])
+  notes         String?
+  // Agreed fare snapshot: never joined to live prices
+  agreedFare    Int?
+  confirmedAt   DateTime?
+  ownerNotes    String?
+  flagged       Boolean       @default(false)
+  flagReason    String?
+  ipHash        String?
+  createdAt     DateTime      @default(now())
+  payments      Payment[]
+  messages      MessageLog[]
 
-  @@index([pickupAt])
   @@index([status])
+  @@index([pickupAt])
+  @@index([phone])
 }
 
+model Payment {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount    Int
+  mode      String // Cash, UPI, Bank, Card
+  note      String?
+  paidAt    DateTime @default(now())
+}
+
+// Records the owner manually marking a WhatsApp message as sent.
 model MessageLog {
   id        String   @id @default(cuid())
   bookingId String
   booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  kind      String // CONFIRMATION | REMINDER | DRIVER
-  ok        Boolean
-  response  String?
+  template  String
   createdAt DateTime @default(now())
+}
+
+model MessageTemplate {
+  key  String @id
+  body String
+}
+
+model Setting {
+  key   String @id
+  value String
 }
 
 model Review {
@@ -86,5 +175,3 @@ model Review {
   text    String
   visible Boolean @default(true)
 }
-
-

@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Travel Booking Website
 
-## Getting Started
+Customer website plus a simple owner dashboard for cabs, local rentals and tour packages.
+Built with Next.js 14, Postgres (Neon) and Prisma.
 
-First, run the development server:
+## What the owner can do (no code needed)
+Log in at `/admin`. Sections: **New Booking Requests, Upcoming Trips, All Bookings, Customer Records,
+Routes & Prices, Vehicles (and drivers), Tour Packages, Payment Records, Booking History, Website & Settings.**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Website requests arrive as *New Request*. Open one, enter the agreed fare, and press **Confirm**.
+  The unique Booking ID (`CB-0001`, `CB-0002`...) is created **only at that moment**.
+- The agreed fare is stored on the booking itself, so later price changes never alter old bookings.
+- Record advance and other payments; the balance is calculated automatically.
+- **WhatsApp:** every booking has a button that opens the customer's chat with a pre-filled message
+  chosen by status. The owner can edit the text and must press Send in WhatsApp.
+  The app never claims a message was sent; the owner can tap "I sent this message" to log it.
+  Templates are editable under Website & Settings.
+- Search by name, phone or Booking ID. Export bookings and customers to CSV (opens in Excel).
+- Photos are uploaded from the phone/computer, resized in the browser and stored in the database.
+
+## Spam protection
+Honeypot field, minimum-fill-time check, limits per IP (5/hour) and per phone (5/day), duplicate detection
+(same phone, pickup and time window in 24h), Indian mobile number validation, and automatic **flagging**
+of suspicious requests (fake-looking names/numbers, links, same pickup and destination, date over a year away).
+Optional CAPTCHA: Cloudflare Turnstile (free). SMS OTP is not included (needs a paid SMS provider).
+
+## Environment variables
+| Name | Purpose |
+|---|---|
+| `DATABASE_URL` | Neon pooled connection string |
+| `DIRECT_URL` | Neon direct (non-pooled) string, used by Prisma |
+| `AUTH_SECRET` | Long random string for login sessions |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Used only by the seed command |
+| `NEXT_PUBLIC_SITE_URL` | Public site address, used in password-reset links |
+| `RESEND_API_KEY`, `OWNER_EMAIL`, `MAIL_FROM` | Optional: new-request alerts and password-reset emails (resend.com). Without them, emails are printed to the server log. |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | Optional CAPTCHA |
+
+## Setup
 ```
+cd app
+npm install
+npx prisma db push
+npx prisma db seed        # creates the owner login and sample data
+npm run dev               # http://localhost:3000
+```
+To reset the owner password from the command line: `ADMIN_RESET=1 ADMIN_PASSWORD=NewPass123 node prisma/seed.js`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Deploy on Vercel with **Root Directory = `app`** and the variables above.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Notifications
+New requests show a red counter in the dashboard header, a banner, and the browser tab title
+(checked every 30 seconds while the dashboard is open). Email alerts are sent if Resend is configured.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## Backups and recovery
+- Neon keeps point-in-time history (free plan: about 6 hours; paid plans: up to 30 days). Restore from
+  the Neon console: *Branches → Restore* to a time before the problem.
+- Recommended: every week, open All Bookings and Customer Records and press **Download Excel/CSV**.
+  Keep the files in Google Drive. This is an independent copy of the data.
+- For stronger guarantees, use a paid Neon plan or schedule `pg_dump` with a GitHub Action.
 
-## Learn More
+## Demonstration checklist
+1. Submit a request on the website, then see it under New Booking Requests.
+2. Open it, enter a fare and confirm. A Booking ID appears.
+3. Edit a route/vehicle price and add a tour package; both appear on the website at once.
+4. Customer Records, search for the customer and see previous bookings.
+5. Add an advance payment and check the balance.
+6. Click WhatsApp on a booking, edit the message and send it manually.
+7. Submit repeatedly; the site limits and flags requests.
+8. Confirm an old booking still shows its original fare after changing prices.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## Not included / extra cost
+SMS OTP verification, automatic WhatsApp sending (Meta API), online payment gateway, native mobile app,
+multi-user staff roles, GST invoices.
