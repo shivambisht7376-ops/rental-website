@@ -201,10 +201,12 @@ export default async function Home() {
         <a href={`https://wa.me/${s.whatsapp}?text=${encodeURIComponent("Hello, I would like to book a cab.")}`} className="inline-block bg-white text-[#8b1a2e] font-semibold rounded-full px-6 py-2">Chat on WhatsApp</a>
         <p className="mt-5 text-white/80">📞 +{s.phone}{s.email ? ` · ✉ ${s.email}` : ""}</p>
         {s.address && <p className="text-white/70">{s.address}</p>}
-        <p className="mt-6 text-white/60">© {new Date().getFullYear()} {s.businessName}</p>
+        <p className="mt-6 text-white/60">© {new Date().getFullYear()} {s.businessName} &middot; <a href="/admin" className="underline hover:text-white">Owner Dashboard</a></p>
       </footer>
 
       <a href={`https://wa.me/${s.whatsapp}?text=${encodeURIComponent("Hello, I would like to book a cab.")}`} aria-label="Chat on WhatsApp" className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full bg-green-500 text-white grid place-items-center text-2xl shadow-lg">💬</a>
     </main>
   );
 }
+
+
