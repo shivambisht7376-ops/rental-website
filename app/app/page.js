@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { inr } from "@/lib/format";
 import BookingForm from "@/components/BookingForm";
+import AuthLink from "@/components/AuthLink";
 
 export const revalidate = 300; // owner edits also trigger an instant refresh
 
@@ -54,7 +55,10 @@ export default async function Home() {
             {packages.length > 0 && <a href="#packages" className="hover:text-[#c41e5b]">Packages</a>}
             <a href="#faq" className="hover:text-[#c41e5b]">FAQ</a>
           </nav>
-          <a href={`tel:+${s.phone}`} className="btn-primary rounded-full px-5 py-2 text-sm">Call Now</a>
+          <div className="flex items-center gap-4">
+            <AuthLink />
+            <a href={`tel:+${s.phone}`} className="btn-primary rounded-full px-5 py-2 text-sm">Call Now</a>
+          </div>
         </div>
       </header>
 

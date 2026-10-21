@@ -15,6 +15,12 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
     document.head.appendChild(sc);
   }, [siteKey]);
 
+  // Pre-fill name/phone for logged-in customers.
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    fetch("/api/me").then((r) => r.json()).then((j) => setMe(j.user)).catch(() => {});
+  }, []);
+
   const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 
   async function submit(e) {
@@ -71,10 +77,10 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
         </select>
         <input name="passengers" type="number" min="1" max="60" defaultValue="2" className="form-field" aria-label="Passengers" />
       </div>
-      <input name="name" required placeholder="Your name" className="form-field" />
+      <input key={`n-${me?.name || ""}`} name="name" required defaultValue={me?.name || ""} placeholder="Your name" className="form-field" />
       <div className="flex gap-2">
         <span className="form-field !w-auto">+91</span>
-        <input name="phone" required inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="Mobile number" className="form-field" />
+        <input key={`p-${me?.phone || ""}`} name="phone" required defaultValue={me?.phone || ""} inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="Mobile number" className="form-field" />
       </div>
       <textarea name="notes" rows={2} placeholder="Anything else? (optional)" className="form-field" />
       {siteKey && <div ref={cfRef} className="cf-turnstile" data-sitekey={siteKey} />}

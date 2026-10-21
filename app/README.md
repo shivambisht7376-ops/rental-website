@@ -34,6 +34,15 @@ Optional CAPTCHA: Cloudflare Turnstile (free). SMS OTP is not included (needs a 
 | `NEXT_PUBLIC_SITE_URL` | Public site address, used in password-reset links |
 | `RESEND_API_KEY`, `OWNER_EMAIL`, `MAIL_FROM` | Optional: new-request alerts and password-reset emails (resend.com). Without them, emails are printed to the server log. |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | Optional CAPTCHA |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in (customers and owner). Redirect URI: `<site>/api/auth/google/callback` |
+| `ADMIN_EMAILS` | Comma-separated Google emails allowed to log in as owner |
+| `ADMIN_SIGNUP_CODE` | Secret invite code for `/admin/signup`. If unset, owner sign-up is disabled |
+
+## Accounts
+- **Customers:** `/signup`, `/login` (email + password or Google). `/account` shows their bookings.
+  Logged-in customers get name/phone pre-filled. Guests can still book without an account.
+- **Owner:** `/admin/login` (password or Google). New owner accounts need the invite code, and Google owner login only works for emails in `ADMIN_EMAILS` or existing owners.
+  Customer and owner sessions are separate, so a customer can never open `/admin`.
 
 ## Setup
 ```

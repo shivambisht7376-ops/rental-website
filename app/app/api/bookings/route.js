@@ -5,6 +5,7 @@ import { istDate } from "@/lib/format";
 import { hashIp, verifyTurnstile, suspicionReasons, tooManyRequests, findDuplicate } from "@/lib/spam";
 import { notifyOwner } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
+import { getUserSession } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Please enter your name").max(80),
@@ -56,6 +57,7 @@ export async function POST(req) {
   const booking = await db.booking.create({
     data: {
       customerId: customer.id,
+      userId: (await getUserSession())?.sub || null,
       customerName: d.name,
       phone,
       tripType: d.tripType,
