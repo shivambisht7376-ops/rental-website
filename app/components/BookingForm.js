@@ -27,17 +27,46 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
     e.preventDefault();
     const form = e.target;
     setState({ loading: true, error: "", requestNo: null, duplicate: false });
-    const data = Object.fromEntries(new FormData(form));
-    data.startedAt = startedAt.current;
-    data.cfToken = data["cf-turnstile-response"] || "";
-    const res = await fetch("/api/bookings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (window.turnstile) window.turnstile.reset();
-      return setState({ loading: false, error: j.error || "Something went wrong. Please try again.", requestNo: null, duplicate: false });
+
+    try {
+      const data = Object.fromEntries(new FormData(form));
+      data.startedAt = startedAt.current;
+      data.cfToken = data["cf-turnstile-response"] || "";
+
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 20000);
+
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (typeof window !== "undefined" && window.turnstile) window.turnstile.reset();
+        return setState({
+          loading: false,
+          error: j.error || "Could not complete request. Please try again or WhatsApp us directly.",
+          requestNo: null,
+          duplicate: false,
+        });
+      }
+      form.reset();
+      setState({ loading: false, error: "", requestNo: j.requestNo, duplicate: !!j.duplicate });
+    } catch (err) {
+      console.error("Booking submission error:", err);
+      setState({
+        loading: false,
+        error: err.name === "AbortError"
+          ? "Request timed out due to slow network. Please check WhatsApp or retry."
+          : (err.message || "Connection error. Please try again."),
+        requestNo: null,
+        duplicate: false,
+      });
     }
-    form.reset();
-    setState({ loading: false, error: "", requestNo: j.requestNo, duplicate: !!j.duplicate });
   }
 
   if (state.requestNo !== null)
@@ -46,10 +75,10 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
         <div className="text-5xl mb-3">📩</div>
         <h3 className="text-xl font-bold">{state.duplicate ? "We already have your request" : "Your request has been received"}</h3>
         <p className="text-gray-600 mt-3 text-sm">
-          Your request is <b>awaiting confirmation</b> from our team. We will contact you on WhatsApp / phone shortly to confirm your fare and booking.
+          Your request #{state.requestNo} is <b>awaiting confirmation</b> from our team. We will contact you on WhatsApp / phone shortly to confirm your fare and booking.
         </p>
         <p className="text-xs text-gray-500 mt-3">A Booking ID is issued only after we confirm your trip.</p>
-        <button onClick={() => { startedAt.current = Date.now(); setState({ loading: false, error: "", requestNo: null, duplicate: false }); }} className="mt-5 text-sm text-[#c41e5b] font-semibold">Make another request</button>
+        <button onClick={() => { startedAt.current = Date.now(); setState({ loading: false, error: "", requestNo: null, duplicate: false }); }} className="mt-5 text-sm text-[#c41e5b] font-semibold underline">Make another request</button>
       </div>
     );
 
@@ -84,8 +113,10 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
       </div>
       <textarea name="notes" rows={2} placeholder="Anything else? (optional)" className="form-field" />
       {siteKey && <div ref={cfRef} className="cf-turnstile" data-sitekey={siteKey} />}
-      {state.error && <p className="text-red-600 text-sm">{state.error}</p>}
-      <button disabled={state.loading} className="btn-primary w-full rounded-xl py-3">{state.loading ? "Sending…" : "Send booking request"}</button>
+      {state.error && <p className="text-red-600 text-sm font-medium">{state.error}</p>}
+      <button disabled={state.loading} className="btn-primary w-full rounded-xl py-3 font-semibold text-white">
+        {state.loading ? "Sending request…" : "Send booking request"}
+      </button>
       <p className="text-xs text-gray-500 text-center">This is a request. Your booking is confirmed only after our team replies.</p>
     </form>
   );

@@ -49,7 +49,7 @@ export async function tooManyRequests(ipHash, phone) {
     db.booking.count({ where: { ipHash, createdAt: { gte: hour } } }),
     db.booking.count({ where: { phone, createdAt: { gte: day } } }),
   ]);
-  return byIp >= 5 || byPhone >= 5;
+  return byIp >= 15 || byPhone >= 15;
 }
 
 export async function findDuplicate(phone, pickup, pickupAt) {
