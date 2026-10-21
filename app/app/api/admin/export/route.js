@@ -4,8 +4,12 @@ import { STATUS_LABEL, fmtDateTime, paidTotal } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 const esc = (v) => {
-  const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v == null ? "" : String(v);
+  // Prevent CSV Formula Injection in Excel: values starting with =, +, -, @, \t, \r
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = "'" + s;
+  }
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const csv = (rows) => "\uFEFF" + rows.map((r) => r.map(esc).join(",")).join("\r\n");
 

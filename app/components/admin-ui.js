@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { STATUS_LABEL, STATUS_COLOR, fmtDateTime, inr, paidTotal } from "@/lib/format";
-import { renderTemplate, defaultTemplateFor, waLink } from "@/lib/templates";
 
 export const Badge = ({ status }) => (
   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[status]}`}>{STATUS_LABEL[status]}</span>
@@ -30,8 +29,6 @@ export const Field = ({ label, children, hint }) => (
 
 // One booking, shown as a card. Used by most dashboard lists.
 export function BookingCard({ b, templates, business, showMoney }) {
-  const key = defaultTemplateFor(b.status);
-  const wa = waLink(b.phone, renderTemplate(templates[key], b, business));
   const paid = paidTotal(b);
   return (
     <div className="bg-white rounded-2xl border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -49,7 +46,7 @@ export function BookingCard({ b, templates, business, showMoney }) {
         )}
       </div>
       <div className="flex gap-2 shrink-0">
-        <a href={wa} target="_blank" rel="noreferrer" className="rounded-xl bg-green-600 text-white text-sm font-semibold px-4 py-2">WhatsApp</a>
+        <Link href={`/admin/bookings/${b.id}#whatsapp`} className="rounded-xl bg-green-600 text-white text-sm font-semibold px-4 py-2 hover:bg-green-700">WhatsApp</Link>
         <Link href={`/admin/bookings/${b.id}`} className="btn-primary rounded-xl text-sm px-4 py-2">Open</Link>
       </div>
     </div>

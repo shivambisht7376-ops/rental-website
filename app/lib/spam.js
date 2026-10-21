@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { db } from "./db";
 
 export const hashIp = (ip) =>
-  crypto.createHash("sha256").update(ip + (process.env.AUTH_SECRET || "")).digest("hex").slice(0, 32);
+  crypto.createHash("sha256").update(ip + (process.env.AUTH_SECRET || "cab-salt-secret")).digest("hex").slice(0, 32);
 
 export async function verifyTurnstile(token, ip) {
   const secret = process.env.TURNSTILE_SECRET;
@@ -19,15 +19,25 @@ export async function verifyTurnstile(token, ip) {
   }
 }
 
+// Cleans input strings by removing raw HTML tags
+export function sanitizeText(str) {
+  if (!str || typeof str !== "string") return "";
+  return str.replace(/<[^>]*>/g, "").trim();
+}
+
 // Returns an array of human-readable reasons a request looks suspicious.
 export function suspicionReasons(d, fillMs) {
   const r = [];
-  if (fillMs != null && fillMs < 4000) r.push("Form filled in under 4 seconds");
+  if (fillMs != null && fillMs < 3500) r.push("Form filled unnaturally fast (<3.5s)");
   if (/^(\d)\1{9}$/.test(d.phone)) r.push("Phone number is one repeated digit");
-  if (/0123456789|1234567890|9876543210/.test(d.phone)) r.push("Phone number is a sequence");
-  if (/^\d+$/.test(d.name) || /(.)\1{4,}/.test(d.name)) r.push("Name looks fake");
-  if (d.destination && d.pickup.trim().toLowerCase() === d.destination.trim().toLowerCase()) r.push("Pickup and destination are the same");
-  if (/https?:\/\/|www\./i.test(`${d.notes || ""} ${d.pickup} ${d.destination || ""}`)) r.push("Contains a link");
+  if (/0123456789|1234567890|9876543210/.test(d.phone)) r.push("Phone number is an obvious sequence");
+  if (/^\d+$/.test(d.name) || /(.)\1{4,}/.test(d.name)) r.push("Name looks fake or machine-generated");
+  if (d.destination && d.pickup.trim().toLowerCase() === d.destination.trim().toLowerCase()) r.push("Pickup and destination are identical");
+  if (/https?:\/\/|www\./i.test(`${d.notes || ""} ${d.pickup} ${d.destination || ""}`)) r.push("Contains an external link");
+  if (/<[a-z][\s\S]*>/i.test(`${d.name} ${d.pickup} ${d.destination || ""} ${d.notes || ""}`)) r.push("Contains HTML or code snippets");
+  if (/\b(viagra|cialis|casino|crypto|forex|bitcoin|fast cash|seo ranking|backlink)\b/i.test(`${d.notes || ""} ${d.name}`)) {
+    r.push("Contains marketing/spam keywords");
+  }
   if (d.pickupAt > new Date(Date.now() + 365 * 86400000)) r.push("Travel date is more than a year away");
   return r;
 }

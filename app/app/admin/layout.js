@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import NewAlert from "@/components/NewAlert";
 import LogoutButton from "@/components/LogoutButton";
+import AdminNav from "@/components/AdminNav";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Owner Dashboard" };
@@ -32,15 +33,11 @@ export default async function AdminLayout({ children }) {
           <b className="text-[#c41e5b]">Owner Dashboard</b>
           <div className="flex items-center gap-4">
             <NewAlert initial={newCount} />
-            <Link href="/" className="text-sm text-gray-500">View website</Link>
+            <Link href="/" className="text-sm text-gray-500 hover:text-gray-900">View website</Link>
             <LogoutButton />
           </div>
         </div>
-        <nav className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto pb-2 text-sm whitespace-nowrap">
-          {NAV.map(([href, label]) => (
-            <Link key={href} href={href} className="px-3 py-1.5 rounded-full border bg-white hover:bg-pink-50 hover:text-[#c41e5b]">{label}</Link>
-          ))}
-        </nav>
+        <AdminNav items={NAV} />
       </header>
       <main className="max-w-7xl mx-auto p-4 sm:p-6">{children}</main>
     </div>

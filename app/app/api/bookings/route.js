@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { istDate } from "@/lib/format";
-import { hashIp, verifyTurnstile, suspicionReasons, tooManyRequests, findDuplicate } from "@/lib/spam";
+import { hashIp, verifyTurnstile, suspicionReasons, tooManyRequests, findDuplicate, sanitizeText } from "@/lib/spam";
 import { notifyOwner } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 import { getUserSession } from "@/lib/auth";
@@ -28,7 +28,7 @@ export async function POST(req) {
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   const d = parsed.data;
-  if (d.website) return NextResponse.json({ ok: true, requestNo: 0 }); // bot: pretend success
+  if (d.website) return NextResponse.json({ ok: true, requestNo: 0 }); // bot honeypot: pretend success
 
   if (!(await verifyTurnstile(d.cfToken, ip)))
     return NextResponse.json({ error: "Please complete the verification check." }, { status: 400 });
@@ -40,34 +40,40 @@ export async function POST(req) {
   const phone = "91" + d.phone;
   const ipHash = hashIp(ip);
   if (await tooManyRequests(ipHash, phone))
-    return NextResponse.json({ error: "Too many requests. Please call us to book." }, { status: 429 });
+    return NextResponse.json({ error: "Too many requests from your device. Please call us directly to book." }, { status: 429 });
 
   const dup = await findDuplicate(phone, d.pickup, pickupAt);
   if (dup) return NextResponse.json({ ok: true, duplicate: true, requestNo: dup.requestNo });
 
-  const reasons = suspicionReasons({ ...d, pickupAt }, d.startedAt ? Date.now() - d.startedAt : null);
+  // Sanitize all textual inputs to prevent XSS / malicious injection
+  const cleanName = sanitizeText(d.name);
+  const cleanPickup = sanitizeText(d.pickup);
+  const cleanDestination = sanitizeText(d.destination);
+  const cleanNotes = d.notes ? sanitizeText(d.notes) : null;
+
+  const reasons = suspicionReasons({ ...d, name: cleanName, pickup: cleanPickup, destination: cleanDestination, notes: cleanNotes, pickupAt }, d.startedAt ? Date.now() - d.startedAt : null);
   const vehicle = d.vehicleId ? await db.vehicle.findUnique({ where: { id: d.vehicleId } }) : null;
 
   const customer = await db.customer.upsert({
     where: { phone },
-    update: { name: d.name },
-    create: { name: d.name, phone },
+    update: { name: cleanName },
+    create: { name: cleanName, phone },
   });
 
   const booking = await db.booking.create({
     data: {
       customerId: customer.id,
       userId: (await getUserSession())?.sub || null,
-      customerName: d.name,
+      customerName: cleanName,
       phone,
       tripType: d.tripType,
-      pickup: d.pickup,
-      destination: d.destination,
+      pickup: cleanPickup,
+      destination: cleanDestination,
       pickupAt,
       passengers: d.passengers,
       vehicleId: vehicle?.id || null,
       vehicleName: vehicle?.name || null,
-      notes: d.notes || null,
+      notes: cleanNotes,
       flagged: reasons.length > 0,
       flagReason: reasons.join("; ") || null,
       ipHash,
@@ -76,7 +82,7 @@ export async function POST(req) {
 
   notifyOwner(
     `New booking request #${booking.requestNo}${reasons.length ? " (flagged)" : ""}`,
-    `${d.name} (${d.phone})\n${d.pickup} to ${d.destination}\n${d.date} ${d.time}, ${d.passengers} passengers\nVehicle: ${vehicle?.name || "any"}${reasons.length ? "\nFlagged: " + reasons.join("; ") : ""}`
+    `${cleanName} (${d.phone})\n${cleanPickup} to ${cleanDestination}\n${d.date} ${d.time}, ${d.passengers} passengers\nVehicle: ${vehicle?.name || "any"}${reasons.length ? "\nFlagged: " + reasons.join("; ") : ""}`
   ).catch(() => {});
   revalidatePath("/admin");
 

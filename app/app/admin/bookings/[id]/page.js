@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { getTemplates, renderTemplate, defaultTemplateFor, TEMPLATE_KEYS } from "@/lib/templates";
+import { getTemplates, renderTemplate, defaultTemplateFor, TEMPLATE_KEYS, waLink } from "@/lib/templates";
 import { getSettings } from "@/lib/settings";
 import { STATUS_LABEL, fmtDateTime, inr, paidTotal, balanceOf } from "@/lib/format";
 import { Badge, Field } from "@/components/admin-ui";
@@ -34,7 +34,7 @@ export default async function BookingDetail({ params }) {
 
   return (
     <div className="max-w-4xl space-y-5">
-      <Link href="/admin/bookings" className="text-sm text-gray-500">← All bookings</Link>
+      <Link href="/admin/bookings" className="text-sm text-gray-500 hover:text-gray-900">← All bookings</Link>
 
       <div className="bg-white rounded-2xl border p-5">
         <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -83,7 +83,7 @@ export default async function BookingDetail({ params }) {
             <Field label="Driver">
               <select name="driverId" className="form-field">
                 <option value="">Not assigned yet</option>
-                {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}{d.phone ? ` (${d.phone})` : ""}</option>)}
               </select>
             </Field>
             <Field label="Advance payment mode">
@@ -131,6 +131,39 @@ export default async function BookingDetail({ params }) {
         </div>
       )}
 
+      {b.driver && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🚖</span>
+                <h3 className="font-bold text-emerald-950">Driver Assigned: {b.driver.name}</h3>
+              </div>
+              <p className="text-sm text-emerald-800 mt-0.5">
+                {b.driver.phone ? `Phone: +${b.driver.phone}` : "No mobile number on file for this driver"}
+              </p>
+              <p className="text-xs text-emerald-700 mt-1">
+                One-click: opens WhatsApp with pre-filled duty slip (pickup, drop, customer phone, date & vehicle).
+              </p>
+            </div>
+            {b.driver.phone ? (
+              <a
+                href={waLink(b.driver.phone, renderTemplate(templates.driver_assignment, b, s.businessName))}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white font-semibold px-5 py-3 text-sm shadow hover:bg-emerald-700 shrink-0"
+              >
+                <span>📲 Send Duty Slip on WhatsApp</span>
+              </a>
+            ) : (
+              <Link href="/admin/vehicles" className="text-xs text-emerald-900 underline font-semibold">
+                Add driver phone number in Vehicles & Drivers →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {b.status === "REJECTED" && b.ownerNotes && <p className="text-sm text-gray-500">Your note: {b.ownerNotes}</p>}
 
       {b.agreedFare != null && (
@@ -160,7 +193,7 @@ export default async function BookingDetail({ params }) {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border p-5">
+      <div id="whatsapp" className="bg-white rounded-2xl border p-5 scroll-mt-20">
         <h2 className="font-bold mb-3">Message the customer on WhatsApp</h2>
         <WhatsAppBox bookingId={b.id} phone={b.phone} messages={messages} labels={TEMPLATE_KEYS} defaultKey={defaultTemplateFor(b.status)} sentLog={sentLog} markSent={markMessageSent} />
       </div>

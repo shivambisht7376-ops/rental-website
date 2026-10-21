@@ -37,12 +37,18 @@ export async function userLogout() {
   redirect("/");
 }
 
-/* ───────── Owner sign-up (invite code required) ───────── */
+/* ───────── Owner sign-up (First admin is initial setup; subsequent admins require invite code) ───────── */
 
 export async function adminSignup(fd) {
+  const adminCount = await db.admin.count();
   const code = process.env.ADMIN_SIGNUP_CODE;
-  if (!code) redirect("/admin/signup?error=disabled");
-  if (s(fd, "code") !== code) redirect("/admin/signup?error=code");
+
+  // If an admin already exists, strictly enforce invite code
+  if (adminCount > 0) {
+    if (!code) redirect("/admin/signup?error=disabled");
+    if (s(fd, "code") !== code) redirect("/admin/signup?error=code");
+  }
+
   const email = s(fd, "email").toLowerCase();
   const password = s(fd, "password");
   if (!/^\S+@\S+\.\S+$/.test(email)) redirect("/admin/signup?error=invalid");
