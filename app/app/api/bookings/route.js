@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { istDate } from "@/lib/format";
-import { hashIp, verifyTurnstile, suspicionReasons, tooManyRequests, findDuplicate, sanitizeText } from "@/lib/spam";
+import {
+  hashIp,
+  verifyTurnstile,
+  verifyMathChallenge,
+  suspicionReasons,
+  tooManyRequests,
+  findDuplicate,
+  sanitizeText,
+} from "@/lib/spam";
 import { notifyOwner } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 import { getUserSession } from "@/lib/auth";
@@ -21,6 +29,8 @@ const schema = z.object({
   website: z.string().optional(), // honeypot
   startedAt: z.coerce.number().optional(),
   cfToken: z.string().optional(),
+  captchaToken: z.string().optional(),
+  captchaAnswer: z.string().optional(),
 });
 
 export async function POST(req) {
@@ -30,8 +40,17 @@ export async function POST(req) {
   const d = parsed.data;
   if (d.website) return NextResponse.json({ ok: true, requestNo: 0 }); // bot honeypot: pretend success
 
-  if (!(await verifyTurnstile(d.cfToken, ip)))
-    return NextResponse.json({ error: "Please complete the verification check." }, { status: 400 });
+  // Bot Verification: Cloudflare Turnstile if configured, otherwise built-in signed math challenge
+  const turnstileSecret = process.env.TURNSTILE_SECRET;
+  if (turnstileSecret) {
+    if (!(await verifyTurnstile(d.cfToken, ip))) {
+      return NextResponse.json({ error: "Please complete the verification check." }, { status: 400 });
+    }
+  } else if (d.captchaToken) {
+    if (!verifyMathChallenge(d.captchaAnswer, d.captchaToken)) {
+      return NextResponse.json({ error: "Incorrect security check answer. Please try again." }, { status: 400 });
+    }
+  }
 
   const pickupAt = istDate(d.date, d.time);
   if (isNaN(pickupAt) || pickupAt < new Date(Date.now() - 10 * 60 * 1000))
@@ -51,7 +70,10 @@ export async function POST(req) {
   const cleanDestination = sanitizeText(d.destination);
   const cleanNotes = d.notes ? sanitizeText(d.notes) : null;
 
-  const reasons = suspicionReasons({ ...d, name: cleanName, pickup: cleanPickup, destination: cleanDestination, notes: cleanNotes, pickupAt }, d.startedAt ? Date.now() - d.startedAt : null);
+  const reasons = suspicionReasons(
+    { ...d, name: cleanName, pickup: cleanPickup, destination: cleanDestination, notes: cleanNotes, pickupAt },
+    d.startedAt ? Date.now() - d.startedAt : null
+  );
   const vehicle = d.vehicleId ? await db.vehicle.findUnique({ where: { id: d.vehicleId } }) : null;
 
   const customer = await db.customer.upsert({

@@ -19,6 +19,40 @@ export async function verifyTurnstile(token, ip) {
   }
 }
 
+// Built-in lightweight, zero-dependency signed security challenge
+export function createMathChallenge() {
+  const a = Math.floor(Math.random() * 8) + 2; // 2 to 9
+  const b = Math.floor(Math.random() * 7) + 1; // 1 to 7
+  const sum = a + b;
+  const expires = Date.now() + 15 * 60 * 1000; // 15 mins validity
+  const secret = process.env.AUTH_SECRET || "cab-booking-salt-key-99";
+  const signature = crypto
+    .createHmac("sha256", secret)
+    .update(`${sum}:${expires}`)
+    .digest("hex")
+    .slice(0, 16);
+  return {
+    question: `Security check: What is ${a} + ${b}?`,
+    token: `${sum}:${expires}:${signature}`,
+  };
+}
+
+export function verifyMathChallenge(answer, token) {
+  if (!token || answer === undefined || answer === null || String(answer).trim() === "") return false;
+  const parts = String(token).split(":");
+  if (parts.length !== 3) return false;
+  const [expectedSum, expires, signature] = parts;
+  if (Date.now() > Number(expires)) return false; // Expired
+  const secret = process.env.AUTH_SECRET || "cab-booking-salt-key-99";
+  const expectedSig = crypto
+    .createHmac("sha256", secret)
+    .update(`${expectedSum}:${expires}`)
+    .digest("hex")
+    .slice(0, 16);
+  if (signature !== expectedSig) return false;
+  return String(answer).trim() === String(expectedSum).trim();
+}
+
 // Cleans input strings by removing raw HTML tags
 export function sanitizeText(str) {
   if (!str || typeof str !== "string") return "";

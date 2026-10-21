@@ -1,19 +1,30 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
   const [state, setState] = useState({ loading: false, error: "", requestNo: null, duplicate: false });
+  const [captcha, setCaptcha] = useState(null);
   const startedAt = useRef(Date.now());
   const cfRef = useRef(null);
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
+  const loadCaptcha = useCallback(() => {
+    fetch("/api/captcha")
+      .then((r) => r.json())
+      .then((j) => setCaptcha(j))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    if (!siteKey) return;
-    const sc = document.createElement("script");
-    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-    sc.async = true;
-    document.head.appendChild(sc);
-  }, [siteKey]);
+    if (siteKey) {
+      const sc = document.createElement("script");
+      sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      sc.async = true;
+      document.head.appendChild(sc);
+    } else {
+      loadCaptcha();
+    }
+  }, [siteKey, loadCaptcha]);
 
   // Pre-fill name/phone for logged-in customers.
   const [me, setMe] = useState(null);
@@ -47,6 +58,7 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (typeof window !== "undefined" && window.turnstile) window.turnstile.reset();
+        if (!siteKey) loadCaptcha();
         return setState({
           loading: false,
           error: j.error || "Could not complete request. Please try again or WhatsApp us directly.",
@@ -55,9 +67,11 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
         });
       }
       form.reset();
+      if (!siteKey) loadCaptcha();
       setState({ loading: false, error: "", requestNo: j.requestNo, duplicate: !!j.duplicate });
     } catch (err) {
       console.error("Booking submission error:", err);
+      if (!siteKey) loadCaptcha();
       setState({
         loading: false,
         error: err.name === "AbortError"
@@ -112,7 +126,38 @@ export default function BookingForm({ vehicles, defaultVehicleId = "" }) {
         <input key={`p-${me?.phone || ""}`} name="phone" required defaultValue={me?.phone || ""} inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="Mobile number" className="form-field" />
       </div>
       <textarea name="notes" rows={2} placeholder="Anything else? (optional)" className="form-field" />
-      {siteKey && <div ref={cfRef} className="cf-turnstile" data-sitekey={siteKey} />}
+
+      {/* CAPTCHA / Bot Protection */}
+      {siteKey ? (
+        <div ref={cfRef} className="cf-turnstile" data-sitekey={siteKey} />
+      ) : captcha ? (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3 text-sm">
+          <div className="flex-1">
+            <label htmlFor="captcha-input" className="block text-xs font-semibold text-gray-700 mb-1">
+              🛡️ {captcha.question}
+            </label>
+            <input
+              id="captcha-input"
+              name="captchaAnswer"
+              required
+              type="number"
+              placeholder="Your answer"
+              className="form-field !py-1.5 !px-3 text-sm !w-32"
+              autoComplete="off"
+            />
+            <input type="hidden" name="captchaToken" value={captcha.token} />
+          </div>
+          <button
+            type="button"
+            onClick={loadCaptcha}
+            title="Get new question"
+            className="text-xs text-[#c41e5b] hover:underline font-semibold p-1 shrink-0"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+      ) : null}
+
       {state.error && <p className="text-red-600 text-sm font-medium">{state.error}</p>}
       <button disabled={state.loading} className="btn-primary w-full rounded-xl py-3 font-semibold text-white">
         {state.loading ? "Sending request…" : "Send booking request"}
