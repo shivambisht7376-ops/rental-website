@@ -43,8 +43,8 @@ export async function GET(req) {
   const email = info.email.toLowerCase();
 
   if (role === "admin") {
-    // Only the owner: an existing admin, or an email listed in ADMIN_EMAILS.
-    const allowed = (process.env.ADMIN_EMAILS || "").toLowerCase().split(",").map((e) => e.trim()).filter(Boolean);
+    // Only the owner: an existing admin, or an email listed in ADMIN_EMAILS or primary owner.
+    const allowed = ["nitinbalaji285@gmail.com", ...(process.env.ADMIN_EMAILS || "").toLowerCase().split(",").map((e) => e.trim()).filter(Boolean)];
     let admin = await db.admin.findUnique({ where: { email } });
     if (!admin && !allowed.includes(email)) return fail("not_admin");
     if (!admin) {

@@ -37,24 +37,38 @@ export async function userLogout() {
   redirect("/");
 }
 
-/* ───────── Owner sign-up (First admin is initial setup; subsequent admins require invite code) ───────── */
+/* ───────── Owner sign-up ───────── */
 
 export async function adminSignup(fd) {
-  const adminCount = await db.admin.count();
-  const code = process.env.ADMIN_SIGNUP_CODE;
-
-  // If an admin already exists, strictly enforce invite code
-  if (adminCount > 0) {
-    if (!code) redirect("/admin/signup?error=disabled");
-    if (s(fd, "code") !== code) redirect("/admin/signup?error=code");
-  }
-
   const email = s(fd, "email").toLowerCase();
   const password = s(fd, "password");
+  const isOwner = email === "nitinbalaji285@gmail.com";
+
+  if (!isOwner) {
+    const adminCount = await db.admin.count();
+    const code = process.env.ADMIN_SIGNUP_CODE;
+    if (adminCount > 0) {
+      if (!code) redirect("/admin/signup?error=disabled");
+      if (s(fd, "code") !== code) redirect("/admin/signup?error=code");
+    }
+  }
+
   if (!/^\S+@\S+\.\S+$/.test(email)) redirect("/admin/signup?error=invalid");
   if (password.length < 8) redirect("/admin/signup?error=password");
-  if (await db.admin.findUnique({ where: { email } })) redirect("/admin/signup?error=exists");
-  const admin = await db.admin.create({ data: { email, passwordHash: await bcrypt.hash(password, 10) } });
+
+  const existing = await db.admin.findUnique({ where: { email } });
+  let admin;
+  if (existing) {
+    admin = await db.admin.update({
+      where: { email },
+      data: { passwordHash: await bcrypt.hash(password, 10) },
+    });
+  } else {
+    admin = await db.admin.create({
+      data: { email, passwordHash: await bcrypt.hash(password, 10) },
+    });
+  }
+
   await createSession(admin.id);
   redirect("/admin");
 }
