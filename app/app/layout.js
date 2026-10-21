@@ -1,5 +1,6 @@
 import { Poppins } from "next/font/google";
 import "./globals.css";
+import AdminBanner from "@/components/AdminBanner";
 
 const poppins = Poppins({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-poppins" });
 
@@ -11,7 +12,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} bg-white text-gray-900 antialiased`}>{children}</body>
+      <body className={`${poppins.variable} bg-white text-gray-900 antialiased`}>
+        <AdminBanner />
+        {children}
+      </body>
     </html>
   );
 }

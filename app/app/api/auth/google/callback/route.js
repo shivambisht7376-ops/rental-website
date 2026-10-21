@@ -42,6 +42,8 @@ export async function GET(req) {
   if (!info?.email || !info.email_verified) return fail("google_unverified");
   const email = info.email.toLowerCase();
 
+  const isOwner = email === "nitinbalaji285@gmail.com" || (process.env.ADMIN_EMAILS || "").toLowerCase().includes(email);
+
   if (role === "admin") {
     // Only the owner: an existing admin, or an email listed in ADMIN_EMAILS or primary owner.
     const allowed = ["nitinbalaji285@gmail.com", ...(process.env.ADMIN_EMAILS || "").toLowerCase().split(",").map((e) => e.trim()).filter(Boolean)];
@@ -62,7 +64,19 @@ export async function GET(req) {
   if (!user) user = await db.user.create({ data: { email, name: info.name || email.split("@")[0], googleId: info.sub } });
   else if (!user.googleId) await db.user.update({ where: { id: user.id }, data: { googleId: info.sub } });
   await createUserSession(user.id);
-  const r = NextResponse.redirect(new URL("/account", origin));
+
+  // If owner logged in via regular customer Google button, also grant admin session
+  if (isOwner) {
+    let admin = await db.admin.findUnique({ where: { email } });
+    if (!admin) {
+      admin = await db.admin.create({ data: { email, googleId: info.sub, passwordHash: await bcryptRandom() } });
+    } else if (!admin.googleId) {
+      await db.admin.update({ where: { id: admin.id }, data: { googleId: info.sub } });
+    }
+    await createSession(admin.id);
+  }
+
+  const r = NextResponse.redirect(new URL(isOwner ? "/admin" : "/account", origin));
   r.cookies.delete("g_state");
   return r;
 }
